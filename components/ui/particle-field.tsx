@@ -6,8 +6,19 @@ import { cn } from "@/lib/utils";
 /**
  * An interactive particle constellation rendered on a canvas.
  * Adapted from the "Aether Flow" hero background: particles drift, repel from
- * the cursor, and connect with fading lines. Rendered as a fixed, full-viewport
- * background so page content can scroll over it.
+ * the pointer (mouse OR touch), and connect with fading lines. Rendered as a
+ * fixed, full-viewport background so page content can scroll over it.
+ *
+ * Mobile considerations:
+ *  - Touch drives the same repel interaction as the mouse.
+ *  - Particles are NOT rebuilt on height-only resizes, so the field doesn't
+ *    "reset" when the browser chrome (address bar) shows/hides during scroll.
+ *  - The canvas is drawn at devicePixelRatio (capped) for crisp lines on
+ *    retina screens, while particle density is based on CSS pixels so the
+ *    count doesn't explode on high-DPR phones.
+ *  - The interaction radius scales with viewport width so it feels right on a
+ *    small screen instead of covering half of it.
+ *  - Respects `prefers-reduced-motion`: renders a single static frame.
  */
 export function ParticleField({ className }: { className?: string }) {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
@@ -19,7 +30,15 @@ export function ParticleField({ className }: { className?: string }) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const reduceMotion =
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
+    // Logical (CSS-pixel) dimensions used for all particle math.
+    let width = 0;
+    let height = 0;
     let animationFrameId = 0;
+
     const mouse: { x: number | null; y: number | null; radius: number } = {
       x: null,
       y: null,
@@ -59,10 +78,10 @@ export function ParticleField({ className }: { className?: string }) {
       }
 
       update() {
-        if (this.x > canvas!.width || this.x < 0) {
+        if (this.x > width || this.x < 0) {
           this.directionX = -this.directionX;
         }
-        if (this.y > canvas!.height || this.y < 0) {
+        if (this.y > height || this.y < 0) {
           this.directionY = -this.directionY;
         }
 
@@ -70,7 +89,7 @@ export function ParticleField({ className }: { className?: string }) {
           const dx = mouse.x - this.x;
           const dy = mouse.y - this.y;
           const distance = Math.sqrt(dx * dx + dy * dy);
-          if (distance < mouse.radius + this.size) {
+          if (distance < mouse.radius + this.size && distance > 0) {
             const forceDirectionX = dx / distance;
             const forceDirectionY = dy / distance;
             const force = (mouse.radius - distance) / mouse.radius;
@@ -89,11 +108,16 @@ export function ParticleField({ className }: { className?: string }) {
 
     const init = () => {
       particles = [];
-      const numberOfParticles = (canvas.height * canvas.width) / 9000;
+      // Density from CSS pixels; capped so weaker mobile GPUs stay smooth
+      // (connect() is O(n²)).
+      const numberOfParticles = Math.min(
+        Math.floor((width * height) / 9000),
+        140,
+      );
       for (let i = 0; i < numberOfParticles; i++) {
         const size = Math.random() * 2 + 1;
-        const x = Math.random() * (canvas.width - size * 4) + size * 2;
-        const y = Math.random() * (canvas.height - size * 4) + size * 2;
+        const x = Math.random() * (width - size * 4) + size * 2;
+        const y = Math.random() * (height - size * 4) + size * 2;
         const directionX = Math.random() * 0.4 - 0.2;
         const directionY = Math.random() * 0.4 - 0.2;
         const color = "rgba(191, 128, 255, 0.8)";
@@ -104,26 +128,27 @@ export function ParticleField({ className }: { className?: string }) {
     };
 
     const connect = () => {
+      const connectDistSq = (width / 7) * (height / 7);
       for (let a = 0; a < particles.length; a++) {
-        for (let b = a; b < particles.length; b++) {
-          const distance =
+        for (let b = a + 1; b < particles.length; b++) {
+          const distSq =
             (particles[a].x - particles[b].x) *
               (particles[a].x - particles[b].x) +
             (particles[a].y - particles[b].y) *
               (particles[a].y - particles[b].y);
 
-          if (distance < (canvas.width / 7) * (canvas.height / 7)) {
-            const opacityValue = 1 - distance / 20000;
+          if (distSq < connectDistSq) {
+            // Fade relative to the actual threshold → always a valid 0..1.
+            const opacityValue = Math.max(0, 1 - distSq / connectDistSq);
 
-            let nearMouse = false;
+            let nearPointer = false;
             if (mouse.x !== null && mouse.y !== null) {
               const dxm = particles[a].x - mouse.x;
               const dym = particles[a].y - mouse.y;
-              const dm = Math.sqrt(dxm * dxm + dym * dym);
-              nearMouse = dm < mouse.radius;
+              nearPointer = dxm * dxm + dym * dym < mouse.radius * mouse.radius;
             }
 
-            ctx.strokeStyle = nearMouse
+            ctx.strokeStyle = nearPointer
               ? `rgba(255, 255, 255, ${opacityValue})`
               : `rgba(200, 150, 255, ${opacityValue})`;
             ctx.lineWidth = 1;
@@ -136,43 +161,85 @@ export function ParticleField({ className }: { className?: string }) {
       }
     };
 
+    const clearFrame = () => {
+      ctx.fillStyle = "rgba(0, 0, 0, 1)";
+      ctx.fillRect(0, 0, width, height);
+    };
+
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
-      ctx.fillStyle = "rgba(0, 0, 0, 1)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      clearFrame();
       for (let i = 0; i < particles.length; i++) {
         particles[i].update();
       }
       connect();
     };
 
+    const renderStatic = () => {
+      clearFrame();
+      for (let i = 0; i < particles.length; i++) {
+        particles[i].draw();
+      }
+      connect();
+    };
+
     const resizeCanvas = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      init();
+      const cssW = window.innerWidth;
+      const cssH = window.innerHeight;
+      // Only the width changing (orientation / real resize) warrants a rebuild.
+      // Height-only changes are the mobile address bar — keep the field intact.
+      const widthChanged = Math.abs(cssW - width) > 1;
+
+      width = cssW;
+      height = cssH;
+      canvas.width = Math.floor(cssW * dpr);
+      canvas.height = Math.floor(cssH * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      // Radius relative to the shorter screen edge so touch feels natural.
+      mouse.radius = Math.max(90, Math.min(200, Math.min(width, height) * 0.35));
+
+      if (widthChanged || particles.length === 0) init();
+      if (reduceMotion) renderStatic();
     };
 
-    const handleMouseMove = (event: MouseEvent) => {
-      mouse.x = event.clientX;
-      mouse.y = event.clientY;
+    const setPointer = (x: number, y: number) => {
+      mouse.x = x;
+      mouse.y = y;
     };
-
-    const handleMouseOut = () => {
+    const clearPointer = () => {
       mouse.x = null;
       mouse.y = null;
     };
 
+    const handleMouseMove = (e: MouseEvent) => setPointer(e.clientX, e.clientY);
+    const handleTouch = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (t) setPointer(t.clientX, t.clientY);
+    };
+
     window.addEventListener("resize", resizeCanvas);
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseout", handleMouseOut);
 
     resizeCanvas();
-    animate();
+
+    if (!reduceMotion) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseout", clearPointer);
+      window.addEventListener("touchstart", handleTouch, { passive: true });
+      window.addEventListener("touchmove", handleTouch, { passive: true });
+      window.addEventListener("touchend", clearPointer);
+      window.addEventListener("touchcancel", clearPointer);
+      animate();
+    }
 
     return () => {
       window.removeEventListener("resize", resizeCanvas);
       window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseout", handleMouseOut);
+      window.removeEventListener("mouseout", clearPointer);
+      window.removeEventListener("touchstart", handleTouch);
+      window.removeEventListener("touchmove", handleTouch);
+      window.removeEventListener("touchend", clearPointer);
+      window.removeEventListener("touchcancel", clearPointer);
       cancelAnimationFrame(animationFrameId);
     };
   }, []);
@@ -181,7 +248,10 @@ export function ParticleField({ className }: { className?: string }) {
     <canvas
       ref={canvasRef}
       aria-hidden="true"
-      className={cn("fixed inset-0 -z-10 h-full w-full bg-black", className)}
+      className={cn(
+        "pointer-events-none fixed inset-0 -z-10 h-full w-full bg-black",
+        className,
+      )}
     />
   );
 }
