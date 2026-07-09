@@ -11,10 +11,21 @@ import { createClient } from "@/lib/supabase/server";
  * Supabase hands us a short-lived `code`, which we exchange for a session and
  * write to cookies.
  */
+/**
+ * Only a same-site path is an acceptable landing spot. `next` arrives in the
+ * URL, so treat it as hostile: a leading `//` or a `scheme:` would let the
+ * redirect leave the site (or, concatenated onto the origin, throw). Anything
+ * that isn't a clean single-slash path falls back to the home page.
+ */
+function safeNext(raw: string | null): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/";
+  return raw;
+}
+
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/";
+  const next = safeNext(searchParams.get("next"));
 
   if (code) {
     const supabase = await createClient();

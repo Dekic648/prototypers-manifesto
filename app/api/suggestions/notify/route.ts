@@ -68,13 +68,22 @@ export async function POST(request: Request) {
   }
 
   const r = body.record;
-  const id = String(r.id ?? "");
+
+  // Defence in depth. The row is already constrained in the database, but this
+  // endpoint composes GitHub-flavoured markdown, so neutralise anything that
+  // could inject a link or break the table regardless of how the row got there.
+  const slug = (v: unknown) =>
+    typeof v === "string" && /^[a-z0-9-]{1,64}$/.test(v) ? v : null;
+  const login = (v: unknown) =>
+    typeof v === "string" && /^[A-Za-z0-9-]{1,39}$/.test(v) ? v : null;
+  const uuid = (v: unknown) =>
+    typeof v === "string" && /^[0-9a-f-]{36}$/.test(v) ? v : "";
+
+  const id = uuid(r.id);
   const kind = r.kind === "new_principle" ? "new principle" : "edit";
-  const principle = typeof r.principle_id === "string" ? r.principle_id : null;
-  const author =
-    typeof r.author_github_login === "string" && r.author_github_login
-      ? `@${r.author_github_login}`
-      : "a reader who signed in with email";
+  const principle = slug(r.principle_id);
+  const authorLogin = login(r.author_github_login);
+  const author = authorLogin ? `@${authorLogin}` : "a reader who signed in with email";
 
   const link = dashboardUrl(id);
 
