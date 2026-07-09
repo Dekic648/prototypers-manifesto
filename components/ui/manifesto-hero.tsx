@@ -3,6 +3,9 @@
 import React from "react";
 import { motion, type Variants } from "framer-motion";
 import { Hammer } from "lucide-react";
+import { NewPrincipleRow } from "@/components/suggestions/new-principle-row";
+import { SuggestButton } from "@/components/suggestions/suggest-button";
+import { SuggestProvider } from "@/components/suggestions/suggest-provider";
 
 /**
  * A principle's `id` is a stable, immutable slug. It is the key that
@@ -69,6 +72,14 @@ const fadeUp: Variants = {
 
 export function ManifestoHero() {
   return (
+    <SuggestProvider>
+      <ManifestoContent />
+    </SuggestProvider>
+  );
+}
+
+function ManifestoContent() {
+  return (
     <div className="relative z-10 mx-auto flex max-w-3xl flex-col px-6 py-20 sm:py-28">
       {/* Header */}
       <header className="text-center">
@@ -133,7 +144,7 @@ export function ManifestoHero() {
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true, margin: "-80px" }}
-            className="flex items-baseline gap-5"
+            className="group flex items-baseline gap-5"
           >
             <span className="shrink-0 font-mono text-lg font-semibold tabular-nums text-purple-400/90 sm:text-xl">
               {String(index + 1).padStart(2, "0")}
@@ -142,8 +153,8 @@ export function ManifestoHero() {
               data-principle-id={principle.id}
               className={
                 principle.isQuote
-                  ? "text-lg italic leading-relaxed text-gray-300 sm:text-xl"
-                  : "text-lg leading-relaxed text-gray-100 sm:text-xl"
+                  ? "flex-1 text-lg italic leading-relaxed text-gray-300 sm:text-xl"
+                  : "flex-1 text-lg leading-relaxed text-gray-100 sm:text-xl"
               }
             >
               {principle.isQuote ? (
@@ -157,8 +168,15 @@ export function ManifestoHero() {
                 principle.text
               )}
             </p>
+            <SuggestButton
+              principleId={principle.id}
+              originalText={principle.text}
+            />
           </motion.li>
         ))}
+
+        {/* The list is open. */}
+        <NewPrincipleRow order={PRINCIPLES.length + 4} />
       </ol>
 
       <footer className="mt-24 text-center text-sm text-gray-500">

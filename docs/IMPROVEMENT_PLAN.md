@@ -152,12 +152,11 @@ Each phase leaves `main` deployable and CI green.
 - [ ] **Phase 1 — Supabase and auth.** Provision through the Vercel Marketplace, `vercel env pull`,
       run the migration, add the client/server/middleware files and the auth menu. Sign-in works;
       nothing else changes.
-- [ ] **Phase 2 — Read path.** Provider, bubbles, panel — read-only. Seed a few approved rows by
-      hand to see it work.
-- [ ] **Phase 3 — Edit suggestions.** Selection hook, toolbar, pencil fallback, dialog. Authors see
-      their own *awaiting review* state.
-- [ ] **Phase 4 — New principles and voting.** The eleventh card, the optimistic vote button, the
-      vote-sorted list.
+- [x] **Phase 2 — Write path, affordances first.** The pencil beside each principle and the `+` row
+      below the tenth, both shown to *everyone*. Sign-in is asked for at submit, not at open.
+- [ ] **Phase 3 — Read path.** Bubble counts beside each principle, the suggestions panel, and the
+      vote-sorted list of proposed principles.
+- [ ] **Phase 4 — Voting.** The optimistic vote button.
 - [ ] **Phase 5 — Real-time.** One channel in the provider. Approvals and counts push live.
 - [ ] **Phase 6 — Polish.** Accessibility sweep, rate-limit tuning, possibly `/admin`.
 
@@ -167,17 +166,20 @@ Each phase leaves `main` deployable and CI green.
 `○ Static`, never `ƒ Dynamic`. With JavaScript disabled, view-source must still contain every
 principle.
 
-**Prove that RLS blocks; do not assume it.** Before the write path ships publicly, using the
-anonymous key directly against `GET /rest/v1/suggestions?select=*`:
+**RLS is proven, not assumed.** Run `npm run test:rls`
+([`scripts/rls-leak-test.mjs`](../scripts/rls-leak-test.mjs)) before shipping any change to the
+policies. It creates a throwaway user, inserts a pending suggestion as that user, and deletes
+everything afterwards. All eight checks passed on 2026-07-09:
 
-- Only `approved` rows come back. Pending rows are invisible. *(This is the leak test.)*
-- Signed in, `PATCH` your own row to `status = 'approved'` → rejected.
-- Insert a vote carrying somebody else's `voter_id` → rejected.
-- Insert a sixth suggestion within an hour → rejected by `under_rate_limit`.
-- Insert a row with `status = 'approved'` → rejected.
+- Anonymous readers **cannot** see a pending suggestion. *(This is the leak test.)*
+- The author **can** see their own pending row — what powers *awaiting review*.
+- Self-approval → `403`. Pre-approved insert → `403`. Spoofed `author_id` → `403`.
+- Voting on a pending suggestion → `403`.
+- The sixth suggestion within an hour → `403`, from `under_rate_limit`.
 
 The entire moderation model rests on one SELECT policy. A mistake there publishes unmoderated
-text on the manifesto.
+text on the manifesto. Keeping email sign-in enabled is what makes this test scriptable — a
+password grant yields a real `authenticated` session without a browser.
 
 **Real-time.** Two browsers. Approve a pending row in the dashboard; it appears in both without a
 reload. Upvote in one; the count moves in the other. Then confirm `vote_count` still matches
