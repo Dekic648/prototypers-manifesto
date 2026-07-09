@@ -64,10 +64,12 @@ try {
   const v6 = await fetch(`${U}/rest/v1/votes`, { method: "POST", headers: anonH, body: JSON.stringify({ suggestion_id: approved.id, voter_id: userId }) });
   check("anonymous cannot vote", v6.status !== 201, `http ${v6.status}`);
 
-  // 7. counts reconcile
-  const total = (await (await fetch(`${U}/rest/v1/votes?select=id`, { headers: svcH })).json()).length;
+  // 7. the denormalised counter agrees with the source of truth.
+  //    Not "both are zero" — real votes from real people live in this table.
+  const realVotes = (await (await fetch(`${U}/rest/v1/votes?suggestion_id=eq.${approved.id}&select=id`, { headers: svcH })).json()).length;
   const final = await count(approved.id);
-  check("vote_count matches the votes table", final === 0 && total === 0, `vote_count=${final}, votes rows=${total}`);
+  check("vote_count matches the votes table", final === realVotes, `vote_count=${final}, votes rows=${realVotes}`);
+  check("the test left vote_count exactly as it found it", final === before, `before=${before}, after=${final}`);
 } finally {
   if (userId) await fetch(`${U}/auth/v1/admin/users/${userId}`, { method: "DELETE", headers: svcH });
   console.log("\ncleanup: throwaway voter deleted");
