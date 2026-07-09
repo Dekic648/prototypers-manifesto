@@ -193,7 +193,7 @@ Each phase leaves `main` deployable and CI green.
       vote-sorted list of proposed principles.
 - [x] **Phase 4 — Voting.** The optimistic vote button, and the vote-sorted list of proposed
       principles beneath the `+` row.
-- [ ] **Phase 5 — Real-time.** One channel in the provider. Approvals and counts push live.
+- [x] **Phase 5 — Real-time.** One channel in the provider. Approvals and counts push live.
 - [ ] **Phase 6 — Polish.** Accessibility sweep, rate-limit tuning, possibly `/admin`.
 
 ## Verification
@@ -224,9 +224,16 @@ by the unique constraint (`23505`), that voting on a pending suggestion is `403`
 another user is `403`, that anonymous voting is `401`, and that `vote_count` ends up matching the
 `votes` table. It restores the count it found. All seven passed on 2026-07-09.
 
-**Real-time.** Two browsers. Approve a pending row in the dashboard; it appears in both without a
-reload. Upvote in one; the count moves in the other. Then confirm `vote_count` still matches
-`select count(*) from votes`.
+**Real-time honours RLS, and that is verified.** `npm run test:realtime`
+([`scripts/realtime-test.mjs`](../scripts/realtime-test.mjs)) subscribes with the *anon* key, then
+uses the service role to flip a row `pending → approved → pending`. The anonymous subscriber receives
+exactly **one** event: the approval. It is never told about the row going back to pending, because
+that row is no longer visible to it. Approval is the moment a suggestion appears; un-approval removes
+it without announcing anything.
+
+The provider refetches on any change rather than patching state from the payload. `vote_count` is
+owned by a trigger, and an UPDATE payload for one row says nothing about ordering across the rest —
+rebuilding from a partial WAL record is how counts drift out of step with the `votes` table.
 
 ## Sharp edges
 

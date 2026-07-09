@@ -74,6 +74,14 @@ export function SuggestProvider({ children }: { children: React.ReactNode }) {
   const [rows, setRows] = React.useState<Suggestion[]>([]);
   const [myVotes, setMyVotes] = React.useState<Set<string>>(() => new Set());
 
+  // Realtime callbacks and the debounce timer need the current user without
+  // re-subscribing every time it changes.
+  const userRef = React.useRef<User | null>(null);
+  const rememberUser = React.useCallback((who: User | null) => {
+    userRef.current = who;
+    setUser(who);
+  }, []);
+
   const load = React.useCallback(
     async (client: SupabaseClient, who: User | null) => {
       const [fetched, votes] = await Promise.all([
@@ -135,13 +143,40 @@ export function SuggestProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
+    let debounce: ReturnType<typeof setTimeout> | undefined;
+
+    /**
+     * Refetch rather than patch state from the change payload.
+     *
+     * `vote_count` is owned by a trigger, and an UPDATE payload for one row says
+     * nothing about ordering across the rest. Rebuilding from a partial WAL
+     * record is exactly how counts drift out of step with the votes table.
+     * At this volume a refetch is cheap and always right.
+     */
+    const scheduleReload = () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        if (!cancelled) void load(supabase, userRef.current);
+      }, 250);
+    };
+
+    // Realtime honours RLS, so an anonymous subscriber is told about a row only
+    // once it is approved — the moment of approval *is* the moment it appears.
+    const channel = supabase
+      .channel("manifesto-suggestions")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "suggestions" },
+        scheduleReload,
+      )
+      .subscribe();
 
     supabase.auth
       .getUser()
       .then(async ({ data }) => {
         if (cancelled) return;
         const who = data.user ?? null;
-        setUser(who);
+        rememberUser(who);
         await load(supabase, who);
         if (cancelled) return;
 
@@ -166,23 +201,25 @@ export function SuggestProvider({ children }: { children: React.ReactNode }) {
       })
       .catch(() => {
         // Paused free-tier project or offline. The manifesto still reads fine.
-        if (!cancelled) setUser(null);
+        if (!cancelled) rememberUser(null);
       });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       const who = session?.user ?? null;
-      setUser(who);
+      rememberUser(who);
       // Signing in reveals your own pending rows and your votes; out hides them.
       void load(supabase, who);
     });
     return () => {
       cancelled = true;
+      clearTimeout(debounce);
       sub.subscription.unsubscribe();
+      void supabase.removeChannel(channel);
     };
     // applyVote depends on myVotes, which changes on every vote. Re-running this
-    // effect then would resubscribe and refetch for nothing.
+    // effect then would tear down the realtime channel and refetch for nothing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, load, submit]);
+  }, [supabase, load, submit, rememberUser]);
 
   const open = React.useCallback((args: OpenArgs) => {
     setError(null);
