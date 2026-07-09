@@ -44,6 +44,21 @@ browser console. Only file an issue if that diff points at a file in this repo.
 3. Run `npm run lint` and `npm run build`; both must pass.
 4. Write a clear PR description explaining the *why*, not just the *what*.
 
+CI runs lint and build on every pull request, so you will see a red check rather
+than a surprise if step 3 was skipped.
+
+### The one-minute route, for wording changes
+
+You do not need to clone anything to fix a typo or sharpen a line. Open
+[`components/ui/manifesto-hero.tsx`][hero] on GitHub and click the pencil icon.
+GitHub will offer to fork the repo for you, let you edit the `PRINCIPLES` array
+in the browser, and turn your edit into a pull request when you click *Propose
+changes*. No `npm install`, no local setup.
+
+Remember that changes to the ten principles want an issue first — see above.
+
+[hero]: ./components/ui/manifesto-hero.tsx
+
 ## Code style
 
 - TypeScript, no `any`.
@@ -54,3 +69,5 @@ browser console. Only file an issue if that diff points at a file in this repo.
 
 Be kind, be constructive, assume good faith. Prototypes are how we think out
 loud — the same generosity applies to reviewing each other's work.
+
+The full text is in [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md).

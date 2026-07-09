@@ -1,0 +1,71 @@
+name: Bug report
+description: Something in the site or the local dev setup is broken.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file this.
+
+  - type: checkboxes
+    id: hydration
+    attributes:
+      label: Hydration warnings
+      description: >
+        If your issue is a console warning that reads "A tree hydrated but some
+        attributes of the server rendered HTML didn't match the client
+        properties", it is almost always a browser extension — Grammarly, Dark
+        Reader, ColorZilla and password managers all inject attributes into the
+        page before React hydrates.
+      options:
+        - label: >
+            This is not a hydration warning, OR I reproduced it in a private
+            window with all extensions disabled.
+          required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to ...
+        2. Scroll to ...
+        3. See ...
+    validations:
+      required: true
+
+  - type: input
+    id: where
+    attributes:
+      label: Where did you see it?
+      placeholder: prototypers-manifesto.vercel.app, or local `npm run dev`
+    validations:
+      required: true
+
+  - type: input
+    id: env
+    attributes:
+      label: Browser and OS
+      placeholder: Safari 18, macOS 15
+    validations:
+      required: false
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Console output
+      description: >
+        For a React error, please include the +/- diff printed below the generic
+        list of suggestions — that diff is the actual cause. This is
+        automatically formatted as code, no backticks needed.
+      render: shell
+    validations:
+      required: false

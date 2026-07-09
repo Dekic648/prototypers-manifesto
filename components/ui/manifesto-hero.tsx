@@ -131,6 +131,8 @@ export function ManifestoHero() {
           An open manifesto for people who build to think.{" "}
           <a
             href="https://github.com/Dekic648/prototypers-manifesto"
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-purple-400 underline-offset-4 transition-colors hover:text-purple-300 hover:underline"
           >
             Contribute on GitHub

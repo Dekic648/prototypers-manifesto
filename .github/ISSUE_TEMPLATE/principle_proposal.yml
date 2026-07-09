@@ -1,0 +1,47 @@
+name: Propose a change to the principles
+description: Sharpen the wording, reorder, add or remove one of the ten.
+labels: [principle]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The wording of a manifesto is deliberate, so principles are discussed
+        here **before** a pull request. Make the case and we'll talk it through.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What are you proposing?
+      options:
+        - Reword an existing principle
+        - Add a principle
+        - Remove a principle
+        - Reorder the principles
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: The principle as it stands
+      description: Paste it verbatim. Leave blank if you are proposing a new one.
+    validations:
+      required: false
+
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Your proposed wording
+      description: Write it exactly as you would want it to appear on the page.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why is this better?
+      description: >
+        What does the new wording say that the old one doesn't? A manifesto earns
+        its lines — argue for this one.
+    validations:
+      required: true
