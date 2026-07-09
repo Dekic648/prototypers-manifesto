@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion, type Variants } from "framer-motion";
+import { motion, MotionConfig, type Variants } from "framer-motion";
 import { Hammer } from "lucide-react";
 import { NewPrincipleRow } from "@/components/suggestions/new-principle-row";
 import { PrincipleBubble } from "@/components/suggestions/principle-bubble";
@@ -59,17 +59,27 @@ const PRINCIPLES: Principle[] = [
   },
 ];
 
-const fadeUp: Variants = {
-  hidden: { opacity: 0, y: 20 },
+// A smooth deceleration (easeOutQuint-ish). Reused so the whole page shares one
+// motion character.
+const EASE = [0.22, 1, 0.36, 1] as const;
+
+// The header animates in on load, gently staggered by index.
+const fadeUpStagger: Variants = {
+  hidden: { opacity: 0, y: 14 },
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: {
-      delay: i * 0.08 + 0.3,
-      duration: 0.7,
-      ease: "easeInOut",
-    },
+    transition: { delay: i * 0.07 + 0.15, duration: 0.55, ease: EASE },
   }),
+};
+
+// Principles animate as they scroll into view. Crucially there is NO index-based
+// delay here: the old code reused the header's stagger, so the tenth principle
+// waited ~1s after entering the viewport before it moved — which read as lag,
+// not stagger. Each principle now eases in promptly the moment it appears.
+const fadeUpScroll: Variants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE } },
 };
 
 export function ManifestoHero() {
@@ -82,123 +92,111 @@ export function ManifestoHero() {
 
 function ManifestoContent() {
   return (
-    <div className="relative z-10 mx-auto flex max-w-3xl flex-col px-6 py-20 sm:py-28">
-      {/* Header */}
-      <header className="text-center">
-        <motion.div
-          custom={0}
-          variants={fadeUp}
-          initial="hidden"
-          animate="visible"
-          className="mb-6 inline-flex items-center gap-2 rounded-full border border-purple-500/20 bg-purple-500/10 px-4 py-1.5 backdrop-blur-sm"
-        >
-          <Hammer className="h-4 w-4 text-purple-400" />
-          <span className="text-sm font-medium text-gray-200">
-            The Prototyper&rsquo;s Manifesto
-          </span>
-        </motion.div>
-
-        <motion.h1
-          custom={1}
-          variants={fadeUp}
-          initial="hidden"
-          animate="visible"
-          className="mb-6 bg-gradient-to-b from-white to-gray-400 bg-clip-text text-4xl font-bold tracking-tighter text-transparent sm:text-6xl md:text-7xl"
-        >
-          The Cult of Prototyping
-        </motion.h1>
-
-        <motion.p
-          custom={2}
-          variants={fadeUp}
-          initial="hidden"
-          animate="visible"
-          className="mb-10 text-xl font-medium text-gray-200 sm:text-2xl"
-        >
-          I prototype, therefore I am.
-        </motion.p>
-
-        <motion.blockquote
-          custom={3}
-          variants={fadeUp}
-          initial="hidden"
-          animate="visible"
-          className="mx-auto max-w-2xl border-l-2 border-purple-500/40 pl-5 text-left"
-        >
-          <p className="text-base italic leading-relaxed text-gray-400 sm:text-lg">
-            &ldquo;The function of the overwhelming majority of your artwork is
-            simply to teach you how to make the small fraction of your artwork
-            that soars.&rdquo;
-          </p>
-          <footer className="mt-3 text-sm text-gray-500">
-            &mdash; David Bayles and Ted Orland
-          </footer>
-        </motion.blockquote>
-      </header>
-
-      {/* The 10 principles */}
-      <ol className="mt-20 flex flex-col gap-8">
-        {PRINCIPLES.map((principle, index) => (
-          <motion.li
-            key={principle.id}
-            custom={index + 4}
-            variants={fadeUp}
+    // reducedMotion="user" honours the OS setting: the y-travel is dropped for
+    // people who ask for less motion, while the opacity fade stays.
+    <MotionConfig reducedMotion="user">
+      <div className="relative z-10 mx-auto flex max-w-3xl flex-col px-6 py-16 sm:py-20">
+        {/* Header */}
+        <header className="text-center">
+          <motion.div
+            custom={0}
+            variants={fadeUpStagger}
             initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-80px" }}
-            className="group flex items-baseline gap-5"
+            animate="visible"
+            className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/20 bg-purple-500/10 px-4 py-1.5 backdrop-blur-sm"
           >
-            <span className="shrink-0 font-mono text-lg font-semibold tabular-nums text-purple-400/90 sm:text-xl">
-              {String(index + 1).padStart(2, "0")}
+            <Hammer className="h-4 w-4 text-purple-400" />
+            <span className="text-sm font-medium text-gray-200">
+              The Prototyper&rsquo;s Manifesto
             </span>
-            <p
-              data-principle-id={principle.id}
-              className={
-                principle.isQuote
-                  ? "flex-1 text-lg italic leading-relaxed text-gray-300 sm:text-xl"
-                  : "flex-1 text-lg leading-relaxed text-gray-100 sm:text-xl"
-              }
-            >
-              {principle.isQuote ? (
-                <>
-                  &ldquo;{principle.text}&rdquo;
-                  <span className="mt-1 block text-sm not-italic text-gray-500">
-                    &mdash; David Bayles and Ted Orland
-                  </span>
-                </>
-              ) : (
-                principle.text
-              )}
-            </p>
-            <PrincipleBubble principleId={principle.id} />
-            <SuggestButton
-              principleId={principle.id}
-              originalText={principle.text}
-            />
-          </motion.li>
-        ))}
+          </motion.div>
 
-        {/* The list is open. */}
-        <NewPrincipleRow order={PRINCIPLES.length + 4} />
-      </ol>
-
-      <ProposedPrinciples />
-
-      <footer className="mt-24 text-center text-sm text-gray-500">
-        <p>
-          An open manifesto for people who build to think.{" "}
-          <a
-            href="https://github.com/Dekic648/prototypers-manifesto"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-purple-400 underline-offset-4 transition-colors hover:text-purple-300 hover:underline"
+          <motion.h1
+            custom={1}
+            variants={fadeUpStagger}
+            initial="hidden"
+            animate="visible"
+            className="mb-4 bg-gradient-to-b from-white to-gray-400 bg-clip-text text-4xl font-bold tracking-tighter text-transparent sm:text-6xl md:text-7xl"
           >
-            Contribute on GitHub
-          </a>
-          .
-        </p>
-      </footer>
-    </div>
+            The Cult of Prototyping
+          </motion.h1>
+
+          <motion.p
+            custom={2}
+            variants={fadeUpStagger}
+            initial="hidden"
+            animate="visible"
+            className="mb-8 text-xl font-medium text-gray-200 sm:text-2xl"
+          >
+            I prototype, therefore I am.
+          </motion.p>
+
+          <motion.blockquote
+            custom={3}
+            variants={fadeUpStagger}
+            initial="hidden"
+            animate="visible"
+            className="mx-auto max-w-2xl border-l-2 border-purple-500/40 pl-5 text-left"
+          >
+            <p className="text-base italic leading-relaxed text-gray-400 sm:text-lg">
+              &ldquo;The function of the overwhelming majority of your artwork is
+              simply to teach you how to make the small fraction of your artwork
+              that soars.&rdquo;
+            </p>
+            <footer className="mt-3 text-sm text-gray-500">
+              &mdash; David Bayles and Ted Orland
+            </footer>
+          </motion.blockquote>
+        </header>
+
+        {/* The 10 principles */}
+        <ol className="mt-16 flex flex-col gap-7">
+          {PRINCIPLES.map((principle, index) => (
+            <motion.li
+              key={principle.id}
+              variants={fadeUpScroll}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, margin: "-64px" }}
+              className="group flex items-baseline gap-4 sm:gap-5"
+            >
+              <span className="shrink-0 font-mono text-lg font-semibold tabular-nums text-purple-400/90 sm:text-xl">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <p
+                data-principle-id={principle.id}
+                className={
+                  principle.isQuote
+                    ? "flex-1 text-lg italic leading-relaxed text-gray-300 sm:text-xl"
+                    : "flex-1 text-lg leading-relaxed text-gray-100 sm:text-xl"
+                }
+              >
+                {principle.isQuote ? (
+                  <>
+                    &ldquo;{principle.text}&rdquo;
+                    <span className="mt-1 block text-sm not-italic text-gray-500">
+                      &mdash; David Bayles and Ted Orland
+                    </span>
+                  </>
+                ) : (
+                  principle.text
+                )}
+              </p>
+              <PrincipleBubble principleId={principle.id} />
+              <SuggestButton
+                principleId={principle.id}
+                originalText={principle.text}
+              />
+            </motion.li>
+          ))}
+
+          {/* The list is open. */}
+          <NewPrincipleRow order={PRINCIPLES.length + 4} />
+        </ol>
+
+        <ProposedPrinciples />
+      </div>
+    </MotionConfig>
   );
 }
 
