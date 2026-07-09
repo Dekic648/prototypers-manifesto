@@ -30,6 +30,7 @@ an interactive particle background, and a permanent invitation to contribute.
 - [shadcn/ui](https://ui.shadcn.com) project structure (`components/ui`)
 - [framer-motion](https://www.framer.com/motion/) for entrance animations
 - [lucide-react](https://lucide.dev) for icons
+- [Supabase](https://supabase.com) for sign-in, suggestions and voting
 
 ## Getting started
 
@@ -42,18 +43,46 @@ npm run dev
 
 Then open [http://localhost:3000](http://localhost:3000).
 
+The manifesto renders without any configuration. Supabase is only needed to work
+on sign-in, suggestions or voting; without it those features simply don't appear.
+
+### Working on the suggestion features
+
+Copy [`.env.example`](./.env.example) to `.env.local` and fill in the three values
+from your Supabase project (Project Settings → API Keys). Note that
+`vercel env pull` returns *empty strings* for the Supabase Marketplace variables,
+so they have to be copied by hand.
+
+Then apply [`supabase/migrations/0001_suggestions.sql`](./supabase/migrations/0001_suggestions.sql)
+in the Supabase SQL editor, and enable the GitHub provider under
+Authentication → Sign In / Providers.
+
+The OAuth chain trips people up, so to be explicit: your **GitHub OAuth App's
+callback URL points at Supabase**, not at this site —
+`https://<project-ref>.supabase.co/auth/v1/callback`. Supabase then redirects to
+`/auth/callback` here. Both `http://localhost:3000/**` and your production URL
+must be listed under Authentication → URL Configuration.
+
+See [`docs/IMPROVEMENT_PLAN.md`](./docs/IMPROVEMENT_PLAN.md) for the full design.
+
 ## Project structure
 
 ```
 app/
-  layout.tsx          # metadata + fonts
-  page.tsx            # composes the background + manifesto
+  layout.tsx          # metadata + fonts + auth menu
+  page.tsx            # composes the background + manifesto (must stay static)
   globals.css         # Tailwind + theme tokens
-components/ui/
-  particle-field.tsx  # interactive canvas background
-  manifesto-hero.tsx  # header, quote, and the ten principles
+  auth/callback/      # OAuth code -> session exchange
+components/
+  auth/auth-menu.tsx  # sign in / avatar / sign out
+  ui/
+    particle-field.tsx  # interactive canvas background
+    manifesto-hero.tsx  # header, quote, and the ten principles
 lib/
   utils.ts            # cn() class-name helper
+  supabase/           # browser + server clients, session refresh
+proxy.ts              # refreshes the auth cookie (Next 16's former "middleware")
+supabase/migrations/  # schema, RLS policies, rate limit
 ```
 
 ## Contributing

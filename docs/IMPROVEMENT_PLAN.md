@@ -96,8 +96,11 @@ Approval happens exclusively through the service role, which bypasses RLS.
 
 **New — infrastructure**
 
-- `lib/supabase/{client,server,middleware}.ts` — `@supabase/ssr` factories.
-- `middleware.ts` — refreshes the auth cookie. Must not de-opt `/` into dynamic rendering.
+- `lib/supabase/{client,server,session}.ts` — `@supabase/ssr` factories. Both clients return `null`
+  when Supabase is unconfigured, so a fresh clone without `.env.local` still renders the manifesto.
+- `proxy.ts` — refreshes the auth cookie. **Next 16 renamed the `middleware` file convention to
+  `proxy`**, and the exported function renames with it; Supabase's docs still show the old name.
+  Confirmed it does not de-opt `/` into dynamic rendering.
 - `app/auth/callback/route.ts` — exchanges the OAuth code for a session.
 - `lib/types.ts`, `lib/suggestions.ts` — types mirroring the schema; the data-access helpers.
 

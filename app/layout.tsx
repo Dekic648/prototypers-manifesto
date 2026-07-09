@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { AuthMenu } from "@/components/auth/auth-menu";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -31,6 +32,7 @@ export default function RootLayout({
       {/* Extensions (Grammarly, password managers) inject attributes on <body>
           before hydration. Suppressed here only — descendants still warn. */}
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        <AuthMenu />
         {children}
       </body>
     </html>
