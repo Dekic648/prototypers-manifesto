@@ -1,5 +1,5 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
-import type { SuggestionDraft } from "@/lib/types";
+import type { Suggestion, SuggestionDraft } from "@/lib/types";
 
 const DRAFT_KEY = "manifesto:suggestion-draft";
 
@@ -43,6 +43,48 @@ function identity(user: User) {
     author_github_login: typeof login === "string" ? login : null,
     author_avatar_url: typeof avatar === "string" ? avatar : null,
   };
+}
+
+/**
+ * Every edit-suggestion the caller is allowed to see.
+ *
+ * There is no `status` filter here on purpose. The SELECT policy is
+ * `status = 'approved' or author_id = auth.uid()`, so an anonymous reader gets
+ * only approved rows while an author additionally gets their own pending ones.
+ * Filtering in the client would be a second, weaker copy of that rule.
+ *
+ * Fails soft: a paused free-tier project returns [] rather than throwing, and
+ * the manifesto renders without bubbles.
+ */
+export async function fetchEditSuggestions(
+  supabase: SupabaseClient,
+): Promise<Suggestion[]> {
+  const { data, error } = await supabase
+    .from("suggestions")
+    .select("*")
+    .eq("kind", "edit")
+    .order("vote_count", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+  return data as Suggestion[];
+}
+
+/** Group by principle slug, preserving the order the query returned. */
+export function groupByPrinciple(rows: Suggestion[]) {
+  const map = new Map<string, Suggestion[]>();
+  for (const row of rows) {
+    if (!row.principle_id) continue;
+    const list = map.get(row.principle_id);
+    if (list) list.push(row);
+    else map.set(row.principle_id, [row]);
+  }
+  return map;
+}
+
+/** Both are null for email sign-ups. Never render a bare `null` as a name. */
+export function displayName(s: Suggestion) {
+  return s.author_github_login ?? "a reader";
 }
 
 export type SubmitResult =

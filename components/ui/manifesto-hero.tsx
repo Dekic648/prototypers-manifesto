@@ -4,6 +4,7 @@ import React from "react";
 import { motion, type Variants } from "framer-motion";
 import { Hammer } from "lucide-react";
 import { NewPrincipleRow } from "@/components/suggestions/new-principle-row";
+import { PrincipleBubble } from "@/components/suggestions/principle-bubble";
 import { SuggestButton } from "@/components/suggestions/suggest-button";
 import { SuggestProvider } from "@/components/suggestions/suggest-provider";
 
@@ -168,6 +169,7 @@ function ManifestoContent() {
                 principle.text
               )}
             </p>
+            <PrincipleBubble principleId={principle.id} />
             <SuggestButton
               principleId={principle.id}
               originalText={principle.text}
