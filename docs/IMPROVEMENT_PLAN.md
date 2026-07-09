@@ -191,7 +191,8 @@ Each phase leaves `main` deployable and CI green.
       below the tenth, both shown to *everyone*. Sign-in is asked for at submit, not at open.
 - [ ] **Phase 3 — Read path.** Bubble counts beside each principle, the suggestions panel, and the
       vote-sorted list of proposed principles.
-- [ ] **Phase 4 — Voting.** The optimistic vote button.
+- [x] **Phase 4 — Voting.** The optimistic vote button, and the vote-sorted list of proposed
+      principles beneath the `+` row.
 - [ ] **Phase 5 — Real-time.** One channel in the provider. Approvals and counts push live.
 - [ ] **Phase 6 — Polish.** Accessibility sweep, rate-limit tuning, possibly `/admin`.
 
@@ -215,6 +216,13 @@ everything afterwards. All eight checks passed on 2026-07-09:
 The entire moderation model rests on one SELECT policy. A mistake there publishes unmoderated
 text on the manifesto. Keeping email sign-in enabled is what makes this test scriptable — a
 password grant yields a real `authenticated` session without a browser.
+
+**Voting integrity is proven too.** `npm run test:votes`
+([`scripts/vote-test.mjs`](../scripts/vote-test.mjs)) creates a throwaway voter and checks that the
+trigger increments and decrements `vote_count`, that a second vote from the same person is rejected
+by the unique constraint (`23505`), that voting on a pending suggestion is `403`, that voting as
+another user is `403`, that anonymous voting is `401`, and that `vote_count` ends up matching the
+`votes` table. It restores the count it found. All seven passed on 2026-07-09.
 
 **Real-time.** Two browsers. Approve a pending row in the dashboard; it appears in both without a
 reload. Upvote in one; the count moves in the other. Then confirm `vote_count` still matches

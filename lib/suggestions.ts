@@ -46,7 +46,7 @@ function identity(user: User) {
 }
 
 /**
- * Every edit-suggestion the caller is allowed to see.
+ * Every suggestion the caller is allowed to see, of both kinds.
  *
  * There is no `status` filter here on purpose. The SELECT policy is
  * `status = 'approved' or author_id = auth.uid()`, so an anonymous reader gets
@@ -56,18 +56,85 @@ function identity(user: User) {
  * Fails soft: a paused free-tier project returns [] rather than throwing, and
  * the manifesto renders without bubbles.
  */
-export async function fetchEditSuggestions(
+export async function fetchSuggestions(
   supabase: SupabaseClient,
 ): Promise<Suggestion[]> {
   const { data, error } = await supabase
     .from("suggestions")
     .select("*")
-    .eq("kind", "edit")
     .order("vote_count", { ascending: false })
     .order("created_at", { ascending: false });
 
   if (error || !data) return [];
   return data as Suggestion[];
+}
+
+/** The ids this user has already upvoted. Empty when signed out. */
+export async function fetchMyVotes(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from("votes")
+    .select("suggestion_id")
+    .eq("voter_id", userId);
+
+  if (error || !data) return new Set();
+  return new Set(data.map((v) => v.suggestion_id as string));
+}
+
+/**
+ * Upvotes are a row in `votes`, not a counter. `unique (suggestion_id, voter_id)`
+ * is what makes one-vote-per-person true, and a trigger keeps `vote_count` in
+ * step — so un-voting is a delete, and the count follows.
+ *
+ * The insert policy also requires the suggestion to be `approved`, so a pending
+ * row cannot be voted on even by its own author.
+ */
+export async function toggleVote(
+  supabase: SupabaseClient,
+  userId: string,
+  suggestionId: string,
+  hasVoted: boolean,
+): Promise<SubmitResult> {
+  if (hasVoted) {
+    const { error } = await supabase
+      .from("votes")
+      .delete()
+      .eq("suggestion_id", suggestionId)
+      .eq("voter_id", userId);
+    return error ? { ok: false, message: error.message } : { ok: true };
+  }
+
+  const { error } = await supabase
+    .from("votes")
+    .insert({ suggestion_id: suggestionId, voter_id: userId });
+
+  if (!error) return { ok: true };
+  // 23505 = unique violation: they already voted, in another tab.
+  if (error.code === "23505") return { ok: true };
+  return { ok: false, message: error.message };
+}
+
+const VOTE_INTENT_KEY = "manifesto:vote-intent";
+
+/** Like the draft, a vote survives the GitHub round-trip. */
+export function saveVoteIntent(suggestionId: string) {
+  try {
+    sessionStorage.setItem(VOTE_INTENT_KEY, suggestionId);
+  } catch {
+    /* private mode */
+  }
+}
+
+export function takeVoteIntent(): string | null {
+  try {
+    const id = sessionStorage.getItem(VOTE_INTENT_KEY);
+    if (id) sessionStorage.removeItem(VOTE_INTENT_KEY);
+    return id;
+  } catch {
+    return null;
+  }
 }
 
 /** Group by principle slug, preserving the order the query returned. */

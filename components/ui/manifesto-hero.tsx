@@ -5,6 +5,7 @@ import { motion, type Variants } from "framer-motion";
 import { Hammer } from "lucide-react";
 import { NewPrincipleRow } from "@/components/suggestions/new-principle-row";
 import { PrincipleBubble } from "@/components/suggestions/principle-bubble";
+import { ProposedPrinciples } from "@/components/suggestions/proposed-principles";
 import { SuggestButton } from "@/components/suggestions/suggest-button";
 import { SuggestProvider } from "@/components/suggestions/suggest-provider";
 
@@ -180,6 +181,8 @@ function ManifestoContent() {
         {/* The list is open. */}
         <NewPrincipleRow order={PRINCIPLES.length + 4} />
       </ol>
+
+      <ProposedPrinciples />
 
       <footer className="mt-24 text-center text-sm text-gray-500">
         <p>

@@ -6,6 +6,7 @@ import { Dialog } from "radix-ui";
 import { Clock, X } from "lucide-react";
 import { displayName } from "@/lib/suggestions";
 import type { Suggestion } from "@/lib/types";
+import { VoteButton } from "./vote-button";
 
 const AVATAR_HOST = "avatars.githubusercontent.com";
 
@@ -81,24 +82,27 @@ export function SuggestionsPanel({
             {suggestions.map((s) => (
               <li
                 key={s.id}
-                className="rounded-xl border border-gray-800 bg-black/30 p-4"
+                className="flex items-start gap-3 rounded-xl border border-gray-800 bg-black/30 p-4"
               >
-                {s.status === "pending" && (
-                  <p className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-purple-500/10 px-2 py-0.5 text-xs text-purple-300">
-                    <Clock className="h-3 w-3" />
-                    Awaiting review — only you can see this
+                <VoteButton suggestion={s} />
+                <div className="min-w-0 flex-1">
+                  {s.status === "pending" && (
+                    <p className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-purple-500/10 px-2 py-0.5 text-xs text-purple-300">
+                      <Clock className="h-3 w-3" />
+                      Awaiting review — only you can see this
+                    </p>
+                  )}
+                  <p className="text-base leading-relaxed text-gray-100">
+                    {s.proposed_text}
                   </p>
-                )}
-                <p className="text-base leading-relaxed text-gray-100">
-                  {s.proposed_text}
-                </p>
-                {s.rationale && (
-                  <p className="mt-2 text-sm leading-relaxed text-gray-500">
-                    {s.rationale}
-                  </p>
-                )}
-                <div className="mt-3">
-                  <Author suggestion={s} />
+                  {s.rationale && (
+                    <p className="mt-2 text-sm leading-relaxed text-gray-500">
+                      {s.rationale}
+                    </p>
+                  )}
+                  <div className="mt-3">
+                    <Author suggestion={s} />
+                  </div>
                 </div>
               </li>
             ))}

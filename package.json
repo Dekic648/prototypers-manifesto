@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:rls": "node scripts/rls-leak-test.mjs"
+    "test:rls": "node scripts/rls-leak-test.mjs",
+    "test:votes": "node scripts/vote-test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

@@ -6,10 +6,14 @@ import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   clearDraft,
   createSuggestion,
-  fetchEditSuggestions,
+  fetchMyVotes,
+  fetchSuggestions,
   groupByPrinciple,
   readDraft,
   saveDraft,
+  saveVoteIntent,
+  takeVoteIntent,
+  toggleVote,
 } from "@/lib/suggestions";
 import type { Suggestion, SuggestionDraft, SuggestionKind } from "@/lib/types";
 import { SuggestDialog } from "./suggest-dialog";
@@ -22,12 +26,15 @@ type OpenArgs = {
 };
 
 type Ctx = {
-  /** False when Supabase isn't configured — the affordances hide themselves. */
   enabled: boolean;
   open: (args: OpenArgs) => void;
   openPanel: (principleId: string) => void;
-  /** Everything the *current viewer* may see: approved, plus their own pending. */
+  /** Everything the current viewer may see: approved, plus their own pending. */
   forPrinciple: (principleId: string) => Suggestion[];
+  /** Approved new-principle proposals, most-voted first. */
+  proposals: Suggestion[];
+  hasVoted: (suggestionId: string) => boolean;
+  vote: (suggestionId: string) => void;
 };
 
 const SuggestContext = React.createContext<Ctx>({
@@ -35,6 +42,9 @@ const SuggestContext = React.createContext<Ctx>({
   open: () => {},
   openPanel: () => {},
   forPrinciple: () => [],
+  proposals: [],
+  hasVoted: () => false,
+  vote: () => {},
 });
 
 export function useSuggest() {
@@ -45,7 +55,6 @@ const emptyDraft = (args: OpenArgs): SuggestionDraft => ({
   kind: args.kind,
   principleId: args.principleId ?? null,
   originalText: args.originalText ?? null,
-  // Editing starts from the current wording. Proposing starts from a blank page.
   proposedText: args.kind === "edit" ? (args.originalText ?? "") : "",
   rationale: "",
 });
@@ -59,16 +68,23 @@ export function SuggestProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = React.useState<string | null>(null);
   const [done, setDone] = React.useState(false);
 
-  // Starts empty, so the server render and the first client render agree: no
-  // bubbles. They appear once the fetch resolves. Never render a count in SSR.
-  const [byPrinciple, setByPrinciple] = React.useState<Map<string, Suggestion[]>>(
-    () => new Map(),
-  );
+  // Both start empty so the server render and the first client render agree:
+  // no bubbles, no proposals. They appear once the fetch resolves. A count
+  // rendered during SSR would be a guaranteed hydration mismatch.
+  const [rows, setRows] = React.useState<Suggestion[]>([]);
+  const [myVotes, setMyVotes] = React.useState<Set<string>>(() => new Set());
 
-  const refresh = React.useCallback(async (client: SupabaseClient) => {
-    const rows = await fetchEditSuggestions(client);
-    setByPrinciple(groupByPrinciple(rows));
-  }, []);
+  const load = React.useCallback(
+    async (client: SupabaseClient, who: User | null) => {
+      const [fetched, votes] = await Promise.all([
+        fetchSuggestions(client),
+        who ? fetchMyVotes(client, who.id) : Promise.resolve(new Set<string>()),
+      ]);
+      setRows(fetched);
+      setMyVotes(votes);
+    },
+    [],
+  );
 
   const submit = React.useCallback(
     async (d: SuggestionDraft, who: User) => {
@@ -80,44 +96,64 @@ export function SuggestProvider({ children }: { children: React.ReactNode }) {
       if (result.ok) {
         clearDraft();
         setDone(true);
-        // The author can see their own pending row, so it shows up immediately
+        // The author can see their own pending row, so it appears immediately
         // as "awaiting review" — for them alone.
-        void refresh(supabase);
+        void load(supabase, who);
       } else {
         setError(result.message);
       }
     },
-    [supabase, refresh],
+    [supabase, load],
+  );
+
+  /** Optimistic: flip locally, reconcile from the server, roll back on failure. */
+  const applyVote = React.useCallback(
+    async (client: SupabaseClient, who: User, id: string) => {
+      const had = myVotes.has(id);
+      const delta = had ? -1 : 1;
+
+      setMyVotes((prev) => {
+        const next = new Set(prev);
+        if (had) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+      setRows((prev) =>
+        prev.map((r) =>
+          r.id === id ? { ...r, vote_count: Math.max(0, r.vote_count + delta) } : r,
+        ),
+      );
+
+      const result = await toggleVote(client, who.id, id, had);
+      // The trigger owns vote_count. Re-read rather than trust the optimism.
+      if (result.ok) void load(client, who);
+      else void load(client, who);
+    },
+    [myVotes, load],
   );
 
   React.useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
 
-    // Inline rather than calling refresh(): setState must happen in a callback,
-    // not synchronously in the effect body.
-    fetchEditSuggestions(supabase)
-      .then((rows) => {
-        if (!cancelled) setByPrinciple(groupByPrinciple(rows));
-      })
-      .catch(() => {
-        /* fails soft — the manifesto renders without bubbles */
-      });
-
-    // Resume the OAuth round-trip. Someone pressed Submit while signed out, we
-    // stashed the draft, sent them to GitHub, and they landed back here. Finish
-    // the job they already asked for rather than making them retype it.
     supabase.auth
       .getUser()
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         if (cancelled) return;
         const who = data.user ?? null;
         setUser(who);
+        await load(supabase, who);
+        if (cancelled) return;
+
+        // Resume whatever they were doing before the GitHub round-trip.
+        const stashedVote = takeVoteIntent();
+        if (who && stashedVote) {
+          await applyVote(supabase, who, stashedVote);
+          return;
+        }
 
         const stashed = readDraft();
         if (!stashed) return;
-
-        // Reopen with their words intact, whether or not they signed in.
         setDraft(stashed);
 
         if (who && stashed.submitOnReturn) {
@@ -134,15 +170,19 @@ export function SuggestProvider({ children }: { children: React.ReactNode }) {
       });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      setUser(session?.user ?? null);
-      // Signing in reveals your own pending rows; signing out hides them again.
-      void refresh(supabase);
+      const who = session?.user ?? null;
+      setUser(who);
+      // Signing in reveals your own pending rows and your votes; out hides them.
+      void load(supabase, who);
     });
     return () => {
       cancelled = true;
       sub.subscription.unsubscribe();
     };
-  }, [supabase, submit, refresh]);
+    // applyVote depends on myVotes, which changes on every vote. Re-running this
+    // effect then would resubscribe and refetch for nothing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase, load, submit]);
 
   const open = React.useCallback((args: OpenArgs) => {
     setError(null);
@@ -158,38 +198,74 @@ export function SuggestProvider({ children }: { children: React.ReactNode }) {
     clearDraft();
   }, []);
 
+  const signInThen = React.useCallback(async () => {
+    if (!supabase) return;
+    const { error: authError } = await supabase.auth.signInWithOAuth({
+      provider: "github",
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+    if (authError) setError("Couldn't reach GitHub. Try again.");
+  }, [supabase]);
+
   const onSubmit = React.useCallback(async () => {
     if (!draft || !supabase) return;
     if (!draft.proposedText.trim()) {
       setError("Write something first.");
       return;
     }
-
     if (!user) {
       // Gate at submit, not at open. They've already invested the words; stash
       // them so the redirect doesn't throw the work away.
       saveDraft({ ...draft, submitOnReturn: true });
-      const { error: authError } = await supabase.auth.signInWithOAuth({
-        provider: "github",
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
-      });
-      if (authError) setError("Couldn't reach GitHub. Try again.");
+      await signInThen();
       return;
     }
-
     await submit(draft, user);
-  }, [draft, supabase, user, submit]);
+  }, [draft, supabase, user, submit, signInThen]);
+
+  const vote = React.useCallback(
+    (id: string) => {
+      if (!supabase) return;
+      if (!user) {
+        saveVoteIntent(id);
+        void signInThen();
+        return;
+      }
+      void applyVote(supabase, user, id);
+    },
+    [supabase, user, applyVote, signInThen],
+  );
+
+  const byPrinciple = React.useMemo(
+    () => groupByPrinciple(rows.filter((r) => r.kind === "edit")),
+    [rows],
+  );
+
+  const proposals = React.useMemo(
+    () => rows.filter((r) => r.kind === "new_principle"),
+    [rows],
+  );
 
   const forPrinciple = React.useCallback(
     (principleId: string) => byPrinciple.get(principleId) ?? [],
     [byPrinciple],
   );
 
+  const hasVoted = React.useCallback((id: string) => myVotes.has(id), [myVotes]);
+
   const enabled = isSupabaseConfigured && !!supabase;
 
   const value = React.useMemo(
-    () => ({ enabled, open, openPanel: setPanelFor, forPrinciple }),
-    [enabled, open, forPrinciple],
+    () => ({
+      enabled,
+      open,
+      openPanel: setPanelFor,
+      forPrinciple,
+      proposals,
+      hasVoted,
+      vote,
+    }),
+    [enabled, open, forPrinciple, proposals, hasVoted, vote],
   );
 
   return (
