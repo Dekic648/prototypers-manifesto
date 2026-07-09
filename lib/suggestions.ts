@@ -34,16 +34,10 @@ export function clearDraft() {
   }
 }
 
-/** Both are null for email sign-ups; every render site needs a fallback. */
-function identity(user: User) {
-  const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
-  const login = meta.user_name ?? meta.preferred_username;
-  const avatar = meta.avatar_url;
-  return {
-    author_github_login: typeof login === "string" ? login : null,
-    author_avatar_url: typeof avatar === "string" ? avatar : null,
-  };
-}
+// Identity is no longer sent from here. `author_github_login` and
+// `author_avatar_url` are set by a BEFORE INSERT trigger from the verified JWT,
+// and the client has no column privilege to write them — otherwise anyone could
+// sign their suggestion "@torvalds". See supabase/migrations/0002.
 
 /**
  * Every suggestion the caller is allowed to see, of both kinds.
@@ -161,9 +155,10 @@ export type SubmitResult =
 /**
  * Inserts a suggestion as the signed-in user.
  *
- * `status` is deliberately never sent. The insert policy requires it to be
- * 'pending', and there is no policy anywhere that lets a client write
- * 'approved' — approval happens only through the service role.
+ * Sends only the columns `authenticated` has been granted. `status`,
+ * `vote_count`, `approved_at` and the author's identity are all set by the
+ * database — the client cannot write them, and adding one of them to this
+ * object would earn a 403 rather than a forged row.
  */
 export async function createSuggestion(
   supabase: SupabaseClient,
@@ -177,7 +172,6 @@ export async function createSuggestion(
     proposed_text: draft.proposedText.trim(),
     rationale: draft.rationale.trim() || null,
     author_id: user.id,
-    ...identity(user),
   });
 
   if (!error) return { ok: true };

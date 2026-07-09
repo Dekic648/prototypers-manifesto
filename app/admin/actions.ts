@@ -4,10 +4,11 @@ import { revalidatePath } from "next/cache";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { adminLogins, createAdminClient } from "@/lib/supabase/admin";
+import type { SuggestionStatus } from "@/lib/types";
 
 /**
  * A Server Action is a public HTTP endpoint. Rendering the page behind an admin
- * check protects the page, not the actions — anyone who learns the action id can
+ * check protects the page, not the actions — anyone who learns an action id can
  * POST to it directly. So every action re-verifies the caller from the session
  * cookie before touching the service-role client.
  */
@@ -26,7 +27,7 @@ export async function requireAdmin(): Promise<User | null> {
   return adminLogins().includes(login.toLowerCase()) ? user : null;
 }
 
-async function setStatus(id: string, status: "approved" | "rejected") {
+async function setStatus(id: string, status: SuggestionStatus) {
   const admin = await requireAdmin();
   if (!admin) throw new Error("Not authorised.");
 
@@ -42,8 +43,8 @@ async function setStatus(id: string, status: "approved" | "rejected") {
     .eq("id", id);
 
   if (error) throw new Error(error.message);
-
   revalidatePath("/admin");
+  revalidatePath("/");
 }
 
 export async function approveSuggestion(id: string) {
@@ -52,4 +53,37 @@ export async function approveSuggestion(id: string) {
 
 export async function rejectSuggestion(id: string) {
   await setStatus(id, "rejected");
+}
+
+/**
+ * Unapprove. The suggestion returns to the queue rather than vanishing — a
+ * decision you regret is not the same as one you never made, and the author can
+ * still see it as "awaiting review".
+ *
+ * Its votes survive. Approve it again and the count is where it was.
+ */
+export async function unapproveSuggestion(id: string) {
+  await setStatus(id, "pending");
+}
+
+/**
+ * Delete, permanently. Cascades to its votes.
+ *
+ * Reject hides a suggestion from everyone but its author. Delete is for the
+ * things that should not exist at all — abuse, spam, a duplicate. There is no
+ * DELETE policy on `suggestions` for any client role, so this can only ever run
+ * here, behind the admin check, with the service role.
+ */
+export async function deleteSuggestion(id: string) {
+  const admin = await requireAdmin();
+  if (!admin) throw new Error("Not authorised.");
+
+  const db = createAdminClient();
+  if (!db) throw new Error("Server is not configured for moderation.");
+
+  const { error } = await db.from("suggestions").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/admin");
+  revalidatePath("/");
 }
