@@ -8,12 +8,12 @@ const PRINCIPLES: { text: string; isQuote?: boolean }[] = [
   { text: "A prototype is an answer to a question. No question, no prototype." },
   { text: "Prototype first to learn, second to prove." },
   { text: "Build ten wrong things to find the one that isn't." },
-  { text: "To prototype is to speak." },
+  { text: "Taste is demonstrated through prototypes, not opinions." },
   { text: "Taste is what survives your own bad prototypes." },
-  { text: "Prototyping is thinking." },
+  { text: "To prototype is to think." },
   { text: "Production over perfection." },
   { text: "One prototype is worth a thousand discussions." },
-  { text: "Quantity creates quality." },
+  { text: "Even the shittiest idea deserves to be prototyped." },
   {
     text: "Fears about prototyping fall into two families: fears about yourself and fears about your reception by others.",
     isQuote: true,
@@ -58,7 +58,7 @@ export function ManifestoHero() {
           animate="visible"
           className="mb-6 bg-gradient-to-b from-white to-gray-400 bg-clip-text text-4xl font-bold tracking-tighter text-transparent sm:text-6xl md:text-7xl"
         >
-          Prototyper&rsquo;s Manifesto
+          The Cult of Prototyping
         </motion.h1>
 
         <motion.p
