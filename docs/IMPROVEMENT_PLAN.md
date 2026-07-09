@@ -139,6 +139,25 @@ For now: the Supabase dashboard's table editor. Save a filter of `status = 'pend
 `created_at` — that is the queue. Flip `status` to `approved`. The dashboard uses the service role
 and bypasses RLS, so no application code and no admin authentication surface needs to exist.
 
+### Notification, and why the issue carries no text
+
+Approve-first makes the maintainer a bottleneck, and a queue nobody is told about is a queue nobody
+tends. A Supabase Database Webhook posts each new suggestion to
+[`app/api/suggestions/notify`](../app/api/suggestions/notify/route.ts), which opens a GitHub issue.
+
+**The issue never contains the suggested text.** This repository is public, so its issues are
+public. Echoing `proposed_text` would publish unmoderated writing the instant it was submitted —
+precisely what approve-first prevents — and would put anything abusive in the issue tracker under
+the maintainer's name, indexed by search engines. The issue carries the principle slug, the author's
+login, the row id and a dashboard link. Reading the suggestion means opening Supabase, where RLS
+still applies.
+
+The endpoint authenticates with a shared secret compared in constant time, and returns `501` rather
+than acting when `SUGGESTION_WEBHOOK_SECRET` or `GITHUB_TOKEN` is unset — an unconfigured deployment
+must never become an open relay to the GitHub API. `/api` is excluded from the proxy matcher: these
+routes authenticate with a header, not a cookie, so refreshing a session for them would spend a
+round-trip to Supabase and refresh nothing.
+
 An `/admin` route is worth building only once volume justifies it. It would need: an allowlist by
 GitHub login, a **server-side** service-role client, and a `moderated_by` audit column. The service
 role key must never reach the browser.
