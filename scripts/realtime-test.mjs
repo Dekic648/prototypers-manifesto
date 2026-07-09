@@ -1,22 +1,22 @@
 /**
- * Does Realtime actually deliver, and does it honour RLS?
+ * Does Realtime deliver, and does it honour RLS?
  *
- * Subscribes with the ANON key, then uses the service role to flip a row
- * pending -> approved -> pending. An anonymous subscriber must be told when the
- * row becomes visible. Restores the original status.
+ * Subscribes with the ANON key, seeds a pending suggestion, approves it with the
+ * service role, then un-approves it. The anonymous subscriber must be told about
+ * the approval — that is the moment the row becomes visible — and must NOT be
+ * told about the creation or the un-approval, because at those moments it cannot
+ * see the row at all.
+ *
+ * Seeds and deletes its own fixture.
  */
-import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
+import {
+  URL_, ANON, svcH, check, summary,
+  makeUser, deleteUser, seedSuggestion, deleteSuggestion,
+} from "./_harness.mjs";
 
-const env = Object.fromEntries(
-  fs.readFileSync(new URL("../.env.local", import.meta.url), "utf8")
-    .split("\n").filter(l => l.includes("=") && !l.startsWith("#"))
-    .map(l => { const i = l.indexOf("="); return [l.slice(0, i), l.slice(i + 1).replace(/^"|"$/g, "")]; })
-);
-const U = env.NEXT_PUBLIC_SUPABASE_URL, ANON = env.NEXT_PUBLIC_SUPABASE_ANON_KEY, SVC = env.SUPABASE_SERVICE_ROLE_KEY;
-
-const anon = createClient(U, ANON);
-const svc = createClient(U, SVC, { auth: { persistSession: false } });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const anon = createClient(URL_, ANON);
 
 const events = [];
 let subscribed = false;
@@ -24,38 +24,51 @@ let subscribed = false;
 const channel = anon
   .channel("test-manifesto-suggestions")
   .on("postgres_changes", { event: "*", schema: "public", table: "suggestions" }, (p) => {
-    events.push({ type: p.eventType, status: p.new?.status ?? p.old?.status });
-    console.log(`  << event received: ${p.eventType}  status=${p.new?.status ?? "?"}`);
+    events.push({ type: p.eventType, status: p.new?.status ?? null });
   })
-  .subscribe((status) => {
-    console.log(`  channel status: ${status}`);
-    if (status === "SUBSCRIBED") subscribed = true;
+  .subscribe((s) => { if (s === "SUBSCRIBED") subscribed = true; });
+
+const setStatus = (id, status) =>
+  fetch(`${URL_}/rest/v1/suggestions?id=eq.${id}`, {
+    method: "PATCH",
+    headers: svcH,
+    body: JSON.stringify({
+      status,
+      approved_at: status === "approved" ? new Date().toISOString() : null,
+    }),
   });
 
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+let author, fixture;
 
-await sleep(3000);
-if (!subscribed) { console.log("\nFAIL: never subscribed. Is the table in the supabase_realtime publication?"); process.exit(1); }
+try {
+  await sleep(3000);
+  check("anonymous client can subscribe to the suggestions channel", subscribed);
+  if (!subscribed) throw new Error("never subscribed — is the table in the supabase_realtime publication?");
 
-// Find the pending row and publish it.
-const { data: rows } = await svc.from("suggestions").select("id,status").eq("status", "pending").limit(1);
-if (!rows?.length) { console.log("\nno pending row to toggle; skipping"); process.exit(0); }
-const id = rows[0].id;
+  author = await makeUser("rt");
+  fixture = await seedSuggestion(author.id, { text: "REALTIME FIXTURE — safe to delete" });
+  await sleep(2000);
 
-console.log(`\napproving ${id.slice(0, 8)} with the service role...`);
-await svc.from("suggestions").update({ status: "approved", approved_at: new Date().toISOString() }).eq("id", id);
-await sleep(2500);
+  const pendingEvents = events.filter((e) => e.status === "pending").length;
+  check("anon is NOT told when a pending suggestion is created",
+    pendingEvents === 0, `${pendingEvents} event(s)`);
 
-const gotApprove = events.some(e => e.status === "approved");
-console.log(`\n  ${gotApprove ? "PASS" : "FAIL"}  anonymous subscriber was told when the row became approved`);
+  await setStatus(fixture, "approved");
+  await sleep(2500);
+  check("anon IS told the moment the row is approved",
+    events.some((e) => e.status === "approved"), `${events.length} event(s) so far`);
 
-console.log(`\nrestoring ${id.slice(0, 8)} to pending...`);
-await svc.from("suggestions").update({ status: "pending", approved_at: null }).eq("id", id);
-await sleep(2000);
-
-const { data: after } = await svc.from("suggestions").select("status").eq("id", id).single();
-console.log(`  restored status: ${after.status}`);
-console.log(`\ntotal events seen by the anon subscriber: ${events.length}`);
-
-await anon.removeChannel(channel);
-process.exit(gotApprove ? 0 : 1);
+  const before = events.length;
+  await setStatus(fixture, "pending");
+  await sleep(2500);
+  check("anon is NOT told when the row is un-approved (it can no longer see it)",
+    events.length === before, `${events.length - before} extra event(s)`);
+} finally {
+  await deleteSuggestion(fixture);
+  await deleteUser(author?.id);
+  await anon.removeChannel(channel);
+  console.log("\ncleanup: fixture and throwaway user deleted");
+  summary();
+  // The realtime websocket keeps the event loop alive.
+  process.exit(process.exitCode ?? 0);
+}
