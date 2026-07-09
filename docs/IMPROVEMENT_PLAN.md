@@ -135,9 +135,25 @@ animation respects `prefers-reduced-motion`, as the particle field already does.
 
 ## Moderation
 
-For now: the Supabase dashboard's table editor. Save a filter of `status = 'pending'` sorted by
-`created_at` — that is the queue. Flip `status` to `approved`. The dashboard uses the service role
-and bypasses RLS, so no application code and no admin authentication surface needs to exist.
+Go to [`/admin`](../app/admin/page.tsx). It lists everything pending with Approve and Reject buttons.
+Visible only to the GitHub logins in `ADMIN_GITHUB_LOGINS`, which defaults to the repository owner.
+Anyone else gets a `404` — not a `403` — so an unauthorised visitor learns nothing about the route.
+
+**Approving publishes the suggestion, not the principle.** An approved suggestion becomes visible to
+other readers and, from Phase 4, votable. The manifesto's own wording lives in
+`components/ui/manifesto-hero.tsx` and only changes with a commit. That separation is the point: a
+proposal can be discussed and ranked without anyone touching the text.
+
+Two things hold this together, and both are easy to get wrong:
+
+- **A Server Action is a public HTTP endpoint.** Gating the *page* behind an admin check protects
+  the page and nothing else — anyone who learns an action's id can POST to it directly. So
+  `approveSuggestion` and `rejectSuggestion` each call `requireAdmin()` again before touching the
+  database. Verify this on every new action.
+- **`lib/supabase/admin.ts` starts with `import "server-only"`**, so pulling the service-role client
+  into a client component fails the build instead of shipping the key to browsers. Confirmed absent
+  from `.next/static`. Note that the anon and service-role JWTs share a 110-character prefix, so a
+  short grep for one will match the other — always check against the full key.
 
 ### Notification, and why the issue carries no text
 
