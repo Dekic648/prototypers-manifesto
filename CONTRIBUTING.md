@@ -25,6 +25,18 @@ npm run lint       # eslint
 npm run build      # production build (must pass before a PR is merged)
 ```
 
+### Seeing a hydration mismatch warning?
+
+If `npm run dev` logs *"A tree hydrated but some attributes of the server
+rendered HTML didn't match the client properties"*, it is almost certainly a
+browser extension — Grammarly, Dark Reader, ColorZilla and password managers all
+inject attributes into the page before React hydrates. Confirm by reloading in a
+private window with extensions disabled.
+
+The five bullet points React prints below that message are generic suggestions,
+not a diagnosis; the real mismatch is shown as a `+`/`-` diff further down in the
+browser console. Only file an issue if that diff points at a file in this repo.
+
 ## Pull request checklist
 
 1. Fork the repo and create a branch: `git checkout -b my-change`.
