@@ -112,15 +112,11 @@ export async function toggleVote(
 
 const VOTE_INTENT_KEY = "manifesto:vote-intent";
 
-/** Like the draft, a vote survives the GitHub round-trip. */
-export function saveVoteIntent(suggestionId: string) {
-  try {
-    sessionStorage.setItem(VOTE_INTENT_KEY, suggestionId);
-  } catch {
-    /* private mode */
-  }
-}
-
+/**
+ * Voting no longer redirects — an anonymous session is minted in place — so
+ * nothing writes this key any more. The reader survives only to drain a value
+ * stashed by a previous deploy, and can be deleted once none can remain.
+ */
 export function takeVoteIntent(): string | null {
   try {
     const id = sessionStorage.getItem(VOTE_INTENT_KEY);

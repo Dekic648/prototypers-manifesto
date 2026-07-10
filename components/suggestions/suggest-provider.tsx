@@ -3,6 +3,7 @@
 import React from "react";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { isAnonymous, isRealUser } from "@/lib/auth";
 import {
   clearDraft,
   createSuggestion,
@@ -11,7 +12,6 @@ import {
   groupByPrinciple,
   readDraft,
   saveDraft,
-  saveVoteIntent,
   takeVoteIntent,
   toggleVote,
 } from "@/lib/suggestions";
@@ -181,6 +181,10 @@ export function SuggestProvider({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
 
         // Resume whatever they were doing before the GitHub round-trip.
+        //
+        // Voting no longer redirects, so nothing writes a vote intent any more.
+        // Draining the key still matters: a reader mid-flow across this deploy
+        // has one stashed, and it would otherwise sit in local storage forever.
         const stashedVote = takeVoteIntent();
         if (who && stashedVote) {
           await applyVote(supabase, who, stashedVote);
@@ -191,7 +195,9 @@ export function SuggestProvider({ children }: { children: React.ReactNode }) {
         if (!stashed) return;
         setDraft(stashed);
 
-        if (who && stashed.submitOnReturn) {
+        // isRealUser, not `who`: an anonymous voter carrying a stashed draft
+        // would otherwise auto-submit into a policy that rejects them.
+        if (isRealUser(who) && stashed.submitOnReturn) {
           // Consume the intent before attempting it. If the insert fails — the
           // rate limit, say — the text stays on screen to retry by hand, and a
           // reload can't resurrect a doomed submission into an endless loop.
@@ -237,12 +243,26 @@ export function SuggestProvider({ children }: { children: React.ReactNode }) {
 
   const signInThen = React.useCallback(async () => {
     if (!supabase) return;
+    const options = { redirectTo: `${window.location.origin}/auth/callback` };
+
+    // Upgrade an anonymous voter in place so the votes they already cast move
+    // with them. signInWithOAuth would create a second user and strand those
+    // votes on an identity that can never sign in again.
+    if (isAnonymous(user)) {
+      const { error: linkError } = await supabase.auth.linkIdentity({
+        provider: "github",
+        options,
+      });
+      if (!linkError) return;
+      console.warn("linkIdentity failed, signing in normally:", linkError.message);
+    }
+
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider: "github",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options,
     });
     if (authError) setError("Couldn't reach GitHub. Try again.");
-  }, [supabase]);
+  }, [supabase, user]);
 
   const onSubmit = React.useCallback(async () => {
     if (!draft || !supabase) return;
@@ -250,7 +270,9 @@ export function SuggestProvider({ children }: { children: React.ReactNode }) {
       setError("Write something first.");
       return;
     }
-    if (!user) {
+    // An anonymous voter is truthy but cannot author a suggestion — the insert
+    // policy in 0004 rejects them. Send them through sign-in like anyone else.
+    if (!isRealUser(user)) {
       // Gate at submit, not at open. They've already invested the words; stash
       // them so the redirect doesn't throw the work away.
       saveDraft({ ...draft, submitOnReturn: true });
@@ -260,17 +282,35 @@ export function SuggestProvider({ children }: { children: React.ReactNode }) {
     await submit(draft, user);
   }, [draft, supabase, user, submit, signInThen]);
 
+  /**
+   * Voting never requires an account. With no session we mint an anonymous one
+   * first: it is a real auth.users row, so `unique (suggestion_id, voter_id)`
+   * still enforces one vote per identity and the vote can still be taken back.
+   *
+   * The session persists in local storage, so the same browser keeps its votes.
+   * A different browser — or cleared storage — is a different voter. That is the
+   * honest ceiling of anonymous voting, and why signing in still matters: only
+   * a linked identity survives a cleared cache.
+   */
   const vote = React.useCallback(
     (id: string) => {
       if (!supabase) return;
-      if (!user) {
-        saveVoteIntent(id);
-        void signInThen();
+      if (user) {
+        void applyVote(supabase, user, id);
         return;
       }
-      void applyVote(supabase, user, id);
+      void (async () => {
+        const { data, error: anonError } =
+          await supabase.auth.signInAnonymously();
+        if (anonError || !data.user) {
+          // Anonymous sign-ins disabled in the dashboard, or a network failure.
+          setError("Couldn't register your vote. Try again.");
+          return;
+        }
+        await applyVote(supabase, data.user, id);
+      })();
     },
-    [supabase, user, applyVote, signInThen],
+    [supabase, user, applyVote],
   );
 
   const byPrinciple = React.useMemo(
@@ -311,7 +351,7 @@ export function SuggestProvider({ children }: { children: React.ReactNode }) {
       {draft && (
         <SuggestDialog
           draft={draft}
-          signedIn={!!user}
+          signedIn={isRealUser(user)}
           submitting={submitting}
           error={error}
           done={done}

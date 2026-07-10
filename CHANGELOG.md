@@ -7,6 +7,51 @@ Entries are grouped by the day the work landed on `main`.
 
 ---
 
+## Unreleased — Voting without an account
+
+### Changed
+
+- **Upvoting no longer requires signing in.** Clicking the arrow mints an
+  anonymous Supabase session (`signInAnonymously()`) and votes with it.
+
+  An anonymous user is a real row in `auth.users` holding the `authenticated`
+  role, so `unique (suggestion_id, voter_id)` still enforces one vote per
+  identity, the `votes_sync_count` trigger still maintains the count, and a vote
+  can still be taken back. The `votes` policies are unchanged.
+
+  The honest limit: a cleared cache or a second browser is a new identity.
+  Counts are directional, not a headcount.
+
+- **Signing in after voting anonymously keeps your votes.** `linkIdentity()`
+  upgrades the anonymous `auth.users` row in place rather than minting a second
+  one. If linking fails (manual linking disabled, or that GitHub account is
+  already a user) it falls back to a normal sign-in, and the anonymous votes are
+  stranded — a dead sign-in button would be worse.
+
+- **Suggesting still requires a real account.** Anonymous users hold the
+  `authenticated` role, so every `to authenticated` policy silently began
+  accepting them. `0004_anonymous_voting.sql` rewrites the two `suggestions`
+  write policies to demand a non-anonymous session. Without that migration,
+  enabling anonymous sign-ins would allow anonymous unmoderated submissions.
+
+### Fixed
+
+- Several checks asked `if (!user)` to mean "signed out". An anonymous voter is
+  truthy, so they wrongly read as signed in: the auth menu showed a "signed in"
+  pill with a Sign out button, and the suggest dialog offered a submit that RLS
+  would reject. `lib/auth.ts` now distinguishes `isRealUser` from `isAnonymous`.
+
+### Requires (one-time, in the Supabase dashboard)
+
+1. Apply `supabase/migrations/0004_anonymous_voting.sql` **first**.
+2. Then enable **Anonymous sign-ins** (Authentication → Sign In / Providers).
+3. Then enable **Manual linking**, which `linkIdentity()` requires.
+
+Doing (2) before (1) leaves a window in which anonymous users can insert
+suggestions.
+
+---
+
 ## 2026-07-10 — Custom domain and diagnosable auth
 
 The site moved to its own domain, and sign-in stopped failing silently.

@@ -5,6 +5,7 @@ import Image from "next/image";
 import type { User } from "@supabase/supabase-js";
 import { LogOut } from "lucide-react";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { isAnonymous, isRealUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 /** Must match `images.remotePatterns` in next.config.ts — next/image throws on
@@ -65,9 +66,27 @@ export function AuthMenu() {
 
   const signIn = async () => {
     setBusy(true);
+    const options = { redirectTo: `${window.location.origin}/auth/callback` };
+
+    // Someone who already voted holds an anonymous session. Linking GitHub to
+    // *that* row upgrades it in place, so their votes come with them. Calling
+    // signInWithOAuth instead would mint a second user and strand the votes on
+    // an identity nobody can sign back into.
+    if (isAnonymous(user)) {
+      const { error } = await supabase.auth.linkIdentity({
+        provider: "github",
+        options,
+      });
+      if (!error) return; // Browser navigates away.
+      // Manual linking disabled, or this GitHub account is already a user.
+      // Falling through signs them in normally; the anonymous votes are lost,
+      // which beats a dead "Sign in" button.
+      console.warn("linkIdentity failed, signing in normally:", error.message);
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "github",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options,
     });
     if (error) setBusy(false); // On success the browser navigates away.
   };
@@ -83,7 +102,10 @@ export function AuthMenu() {
     "border-purple-500/20 bg-purple-500/10 px-3 py-1.5 text-sm backdrop-blur-sm " +
     "transition-colors disabled:opacity-50";
 
-  if (!user) {
+  // An anonymous voter has a session but no identity. They are "signed out" as
+  // far as this menu is concerned — there is no name to show, and offering
+  // "Sign out" would only discard the votes they just cast.
+  if (!isRealUser(user)) {
     return (
       <button
         type="button"
