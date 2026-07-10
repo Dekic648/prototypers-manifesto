@@ -19,7 +19,7 @@ const DESCRIPTION =
   "I prototype, therefore I am. Ten principles for people who build to think.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://prototypers-manifesto.vercel.app"),
+  metadataBase: new URL("https://theprototypersmanifesto.com"),
   title: "The Cult of Prototyping",
   description: DESCRIPTION,
   // opengraph-image.tsx is picked up automatically; these set the text around it.
