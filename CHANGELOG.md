@@ -7,7 +7,7 @@ Entries are grouped by the day the work landed on `main`.
 
 ---
 
-## Unreleased — Voting without an account
+## 2026-07-10 — Voting without an account
 
 ### Changed
 
@@ -41,14 +41,39 @@ Entries are grouped by the day the work landed on `main`.
   pill with a Sign out button, and the suggest dialog offered a submit that RLS
   would reject. `lib/auth.ts` now distinguishes `isRealUser` from `isAnonymous`.
 
-### Requires (one-time, in the Supabase dashboard)
+### Supabase configuration
+
+Done on the live project. Anyone standing this up from scratch needs the same
+three, **in this order**:
 
 1. Apply `supabase/migrations/0004_anonymous_voting.sql` **first**.
 2. Then enable **Anonymous sign-ins** (Authentication → Sign In / Providers).
 3. Then enable **Manual linking**, which `linkIdentity()` requires.
 
 Doing (2) before (1) leaves a window in which anonymous users can insert
-suggestions.
+suggestions, because they hold the `authenticated` role the moment the feature
+is on. Skipping (3) is not fatal but silently strands anonymous votes when
+someone later signs in.
+
+### Verified
+
+Against the live database, with an anonymous session:
+
+- The JWT carries `role=authenticated` and `is_anonymous=true`, and
+  `is_anonymous_session()` agrees.
+- Voting returns `201` and the trigger increments `vote_count`; un-voting
+  returns `204` and it decrements.
+- Inserting a suggestion fails with
+  `new row violates row-level security policy`, and nothing persists.
+
+  Worth recording: the first attempt at this probe passed for the wrong reason.
+  It included `status`, which `0002` does not grant to `authenticated`, so it
+  was rejected on a column privilege without ever reaching the policy. Only a
+  probe restricted to the six granted columns actually tests the anonymity
+  check.
+
+And in a real browser against production, signed out: the count increments, the
+vote survives a reload, and the auth menu still reads "Sign in".
 
 ---
 
