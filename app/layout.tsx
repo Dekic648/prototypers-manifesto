@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { AuthMenu } from "@/components/auth/auth-menu";
+import { AuthErrorNotice } from "@/components/auth/auth-error-notice";
 import { AboutLink } from "@/components/about-link";
 import "./globals.css";
 
@@ -52,6 +53,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <AboutLink />
         <AuthMenu />
+        <AuthErrorNotice />
         {children}
         <Analytics />
       </body>
