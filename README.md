@@ -89,6 +89,10 @@ supabase/migrations/  # schema, RLS policies, rate limit
 
 Contributions are welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md).
 
+## Changelog
+
+What has changed, and why — see [CHANGELOG.md](./CHANGELOG.md).
+
 ## License
 
 [MIT](./LICENSE)
