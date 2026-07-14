@@ -27,6 +27,33 @@ export async function requireAdmin(): Promise<User | null> {
   return adminLogins().includes(login.toLowerCase()) ? user : null;
 }
 
+/**
+ * Whether the current session may moderate, and how many suggestions are
+ * waiting. Called from the client auth menu to decide whether to show a
+ * "Moderate" link — the allowlist (ADMIN_GITHUB_LOGINS) never leaves the
+ * server, so a non-admin learns nothing by inspecting the response.
+ *
+ * A non-admin always gets `{ isAdmin: false, pending: 0 }`, indistinguishable
+ * from an admin with an empty queue would be — except an admin's isAdmin is true.
+ */
+export async function getModerationStatus(): Promise<{
+  isAdmin: boolean;
+  pending: number;
+}> {
+  const admin = await requireAdmin();
+  if (!admin) return { isAdmin: false, pending: 0 };
+
+  const db = createAdminClient();
+  if (!db) return { isAdmin: true, pending: 0 };
+
+  const { count } = await db
+    .from("suggestions")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending");
+
+  return { isAdmin: true, pending: count ?? 0 };
+}
+
 async function setStatus(id: string, status: SuggestionStatus) {
   const admin = await requireAdmin();
   if (!admin) throw new Error("Not authorised.");

@@ -2,10 +2,12 @@
 
 import React from "react";
 import Image from "next/image";
+import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
-import { LogOut } from "lucide-react";
+import { LogOut, ShieldCheck } from "lucide-react";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { isAnonymous, isRealUser } from "@/lib/auth";
+import { getModerationStatus } from "@/app/admin/actions";
 import { cn } from "@/lib/utils";
 
 /** Must match `images.remotePatterns` in next.config.ts — next/image throws on
@@ -43,6 +45,7 @@ function safeAvatar(url: unknown): string | null {
 export function AuthMenu() {
   const [user, setUser] = React.useState<User | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [mod, setMod] = React.useState({ isAdmin: false, pending: 0 });
   const supabase = React.useMemo(() => createClient(), []);
 
   React.useEffect(() => {
@@ -60,6 +63,28 @@ export function AuthMenu() {
     });
     return () => sub.subscription.unsubscribe();
   }, [supabase]);
+
+  // Ask the server whether this session may moderate. Only a real (non-anonymous)
+  // user can be an admin, so anonymous voters never trigger the round-trip. The
+  // allowlist stays server-side; a non-admin simply gets isAdmin: false.
+  //
+  // No reset in the non-real-user branch: the Moderate link only renders inside
+  // the signed-in pill (gated on isRealUser below), and every real user — admin
+  // or not — re-runs this and overwrites `mod`. So a stale value is never shown.
+  React.useEffect(() => {
+    if (!isRealUser(user)) return;
+    let cancelled = false;
+    getModerationStatus()
+      .then((r) => {
+        if (!cancelled) setMod(r);
+      })
+      .catch(() => {
+        if (!cancelled) setMod({ isAdmin: false, pending: 0 });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   // A clone without .env.local still renders the manifesto. It just can't sign in.
   if (!isSupabaseConfigured || !supabase) return null;
@@ -150,6 +175,24 @@ export function AuthMenu() {
         </span>
       )}
       <span className="max-w-[12ch] truncate">{name}</span>
+      {mod.isAdmin && (
+        <Link
+          href="/admin"
+          title="Moderate suggestions"
+          className="ml-1 flex items-center gap-1 rounded-full border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 text-xs text-purple-200 transition-colors hover:bg-purple-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
+        >
+          <ShieldCheck className="h-3.5 w-3.5" />
+          <span>Moderate</span>
+          {mod.pending > 0 && (
+            <span
+              aria-label={`${mod.pending} awaiting review`}
+              className="rounded-full bg-purple-400 px-1.5 font-mono text-[10px] font-semibold text-black"
+            >
+              {mod.pending}
+            </span>
+          )}
+        </Link>
+      )}
       <button
         type="button"
         onClick={signOut}
