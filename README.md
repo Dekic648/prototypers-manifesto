@@ -14,12 +14,12 @@ an interactive particle background, and a permanent invitation to contribute.
 1. A prototype is an answer to a question. No question, no prototype.
 2. Prototype first to learn, second to prove.
 3. Build ten wrong things to find the one that isn't.
-4. To prototype is to speak.
+4. Fall in love with finding out.
 5. Taste is what survives your own bad prototypes.
-6. Prototyping is thinking.
+6. To prototype is to think.
 7. Production over perfection.
 8. One prototype is worth a thousand discussions.
-9. Quantity creates quality.
+9. Even the shittiest idea deserves to be prototyped.
 10. "Fears about prototyping fall into two families: fears about yourself and
     fears about your reception by others." — David Bayles and Ted Orland
 

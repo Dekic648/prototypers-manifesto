@@ -34,10 +34,7 @@ const PRINCIPLES: Principle[] = [
     id: "ten-wrong-things",
     text: "Build ten wrong things to find the one that isn't.",
   },
-  {
-    id: "taste-through-prototypes",
-    text: "Taste is demonstrated through prototypes, not opinions.",
-  },
+  { id: "fall-in-love-with-finding-out", text: "Fall in love with finding out." },
   {
     id: "taste-survives-bad-prototypes",
     text: "Taste is what survives your own bad prototypes.",
