@@ -16,12 +16,12 @@ an interactive particle background, and a permanent invitation to contribute.
 3. Build ten wrong things to find the one that isn't.
 4. Fall in love with finding out.
 5. Taste is what survives your own bad prototypes.
-6. To prototype is to think.
+6. To prototype is to think; prototyping is thinking.
 7. Quantity creates quality.
-8. One prototype is worth a thousand discussions.
+8. The only thing stopping you from prototyping is the fear of finding out.
 9. Even the shittiest idea deserves to be prototyped.
 10. "Fears about prototyping fall into two families: fears about yourself and
-    fears about your reception by others." — David Bayles and Ted Orland
+    fears about your reception by others."
 
 ## Tech stack
 

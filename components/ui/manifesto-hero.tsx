@@ -39,11 +39,14 @@ const PRINCIPLES: Principle[] = [
     id: "taste-survives-bad-prototypes",
     text: "Taste is what survives your own bad prototypes.",
   },
-  { id: "prototype-is-to-think", text: "To prototype is to think." },
+  {
+    id: "prototype-is-to-think",
+    text: "To prototype is to think; prototyping is thinking.",
+  },
   { id: "quantity-creates-quality", text: "Quantity creates quality." },
   {
-    id: "worth-a-thousand-discussions",
-    text: "One prototype is worth a thousand discussions.",
+    id: "fear-of-finding-out",
+    text: "The only thing stopping you from prototyping is the fear of finding out.",
   },
   {
     id: "every-idea-deserves-a-prototype",
@@ -169,12 +172,7 @@ function ManifestoContent() {
                 }
               >
                 {principle.isQuote ? (
-                  <>
-                    &ldquo;{principle.text}&rdquo;
-                    <span className="mt-1 block text-sm not-italic text-gray-500">
-                      &mdash; David Bayles and Ted Orland
-                    </span>
-                  </>
+                  <>&ldquo;{principle.text}&rdquo;</>
                 ) : (
                   principle.text
                 )}
