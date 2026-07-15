@@ -40,7 +40,7 @@ const PRINCIPLES: Principle[] = [
     text: "Taste is what survives your own bad prototypes.",
   },
   { id: "prototype-is-to-think", text: "To prototype is to think." },
-  { id: "production-over-perfection", text: "Production over perfection." },
+  { id: "quantity-creates-quality", text: "Quantity creates quality." },
   {
     id: "worth-a-thousand-discussions",
     text: "One prototype is worth a thousand discussions.",

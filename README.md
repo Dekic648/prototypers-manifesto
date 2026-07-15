@@ -17,7 +17,7 @@ an interactive particle background, and a permanent invitation to contribute.
 4. Fall in love with finding out.
 5. Taste is what survives your own bad prototypes.
 6. To prototype is to think.
-7. Production over perfection.
+7. Quantity creates quality.
 8. One prototype is worth a thousand discussions.
 9. Even the shittiest idea deserves to be prototyped.
 10. "Fears about prototyping fall into two families: fears about yourself and
