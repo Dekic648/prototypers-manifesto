@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { AuthMenu } from "@/components/auth/auth-menu";
 import { AuthErrorNotice } from "@/components/auth/auth-error-notice";
 import { AboutLink } from "@/components/about-link";
+import { PosterLink } from "@/components/poster-link";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -51,7 +52,10 @@ export default function RootLayout({
       {/* Extensions (Grammarly, password managers) inject attributes on <body>
           before hydration. Suppressed here only — descendants still warn. */}
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
-        <AboutLink />
+        <nav className="fixed left-4 top-4 z-20 flex items-center gap-2">
+          <AboutLink />
+          <PosterLink />
+        </nav>
         <AuthMenu />
         <AuthErrorNotice />
         {children}
