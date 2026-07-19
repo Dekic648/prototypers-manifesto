@@ -7,6 +7,45 @@ Entries are grouped by the day the work landed on `main`.
 
 ---
 
+## 2026-07-19 — A heartbeat, after the database paused
+
+### Fixed
+
+- **The site's Supabase project had paused, and sign-in, suggestions and voting
+  all stopped at once.** Supabase pauses a free-tier project after 7 consecutive
+  days without activity. When it pauses, the API hostname stops resolving —
+  `rzxmzaasqqfqdknppvps.supabase.co` returned NXDOMAIN, so every auth call and
+  every query failed at the DNS layer.
+
+  The manifesto itself kept rendering throughout, because the ten principles
+  live in the bundle rather than the database. That made the outage look like a
+  partial front-end bug when it was a total back-end one. Restoring the project
+  from the Supabase dashboard brought it back with all 6 suggestions and 11
+  votes intact; no data was lost, and no redeploy was needed, because the
+  project URL and anon key survive a pause unchanged.
+
+### Added
+
+- **A daily cron keeps the database awake.** `/api/keepalive` runs a `HEAD`
+  count against `suggestions` and `vercel.json` calls it at 07:00 UTC. Any
+  request resets Supabase's 7-day inactivity clock; the query is the cheapest
+  one that still reaches Postgres.
+
+  It reads as anon, so RLS still applies — this is a heartbeat, not a back door.
+  It authenticates with `CRON_SECRET` in constant time, the way
+  `/api/suggestions/notify` does, and returns 501 rather than running unguarded
+  if that variable is missing.
+
+  Both failure modes here are silent ones, so both are made loud. The route is
+  `force-dynamic`, because a cached 200 would report success without ever
+  touching the database. And it returns 500 — never 200 — when the query
+  errors, so a heartbeat that stopped landing shows up as a failed invocation
+  in Vercel instead of a green cron over a project that pauses anyway.
+
+  The honest limit: this defends against pausing from inactivity, not against
+  anything else that takes the project down. It is a keepalive on a free tier,
+  not a substitute for paying for one that never pauses.
+
 ## 2026-07-10 — Voting without an account
 
 ### Changed
